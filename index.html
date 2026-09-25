@@ -1134,6 +1134,7 @@ function renderPropiedadesView(filters={}){
 function openProperty(id){
   window.history.pushState({}, "", "?propiedad=" + encodeURIComponent(id));
   const property=bihgoGetPropertyById(id);
+  document.title = property.titulo + " | BIHGO";
   const root=document.getElementById("property-root");
   if(!property){ root.innerHTML=`<div class="empty-state">No encontramos esa propiedad.</div>`; showView("propiedad"); return; }
 
