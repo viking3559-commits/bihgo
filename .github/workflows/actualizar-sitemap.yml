@@ -1,0 +1,79 @@
+name: Actualizar sitemap BIHGO
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar-sitemap:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Generar sitemap desde Render
+        env:
+          API_URL: https://bihgo.onrender.com/api/properties
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from xml.sax.saxutils import escape
+
+          api_url = os.environ["API_URL"]
+
+          with urllib.request.urlopen(api_url, timeout=30) as response:
+              data = json.load(response)
+
+          properties = data.get("properties", [])
+
+          urls = [
+              ("https://bihgo.com.mx/", "weekly", "1.0")
+          ]
+
+          for p in properties:
+              property_id = p.get("id")
+              if property_id:
+                  urls.append((
+                      f"https://bihgo.com.mx/?propiedad={property_id}",
+                      "weekly",
+                      "0.8"
+                  ))
+
+          xml = [
+              '<?xml version="1.0" encoding="UTF-8"?>',
+              '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+              ""
+          ]
+
+          for loc, changefreq, priority in urls:
+              xml.extend([
+                  "  <url>",
+                  f"    <loc>{escape(loc)}</loc>",
+                  f"    <changefreq>{changefreq}</changefreq>",
+                  f"    <priority>{priority}</priority>",
+                  "  </url>",
+                  ""
+              ])
+
+          xml.append("</urlset>")
+
+          with open("sitemap.xml", "w", encoding="utf-8") as f:
+              f.write("\n".join(xml))
+
+          print(f"Sitemap generado con {len(urls)} URLs.")
+          PY
+
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sitemap.xml
+          git diff --cached --quiet || git commit -m "Actualizar sitemap automáticamente"
+          git push
