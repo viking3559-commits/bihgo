@@ -3021,7 +3021,10 @@ document.addEventListener("DOMContentLoaded",()=>{
   bihgoSyncPropertiesFromServer();
   bihgoRenderGrid("featured-grid", BIHGO_PROPERTIES.filter(p=>p.destacada));
   bihgoRenderCarousel();
-
+const propiedadId = new URLSearchParams(window.location.search).get("propiedad");
+if (propiedadId) {
+  bihgoSyncPropertiesFromServer().then(() => openProperty(propiedadId));
+}
   document.getElementById("home-search-form").addEventListener("submit",e=>{
     e.preventDefault();
     const filters={
