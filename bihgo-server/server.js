@@ -323,29 +323,29 @@ app.get("/api/visits/stats", (req, res) => {
  */
 
 // --- Propiedades ---
-app.get("/api/properties", (req, res) => {
+app.get("/api/properties", async (req, res) => {
   try {
-    res.json({ connected: true, properties: db.getAllProperties() });
+    res.json({ connected: true, properties: await db.getAllProperties() });
   } catch (err) {
     console.error("Error leyendo propiedades:", err.message);
     res.status(500).json({ connected: false, error: "No se pudieron leer las propiedades." });
   }
 });
 
-app.post("/api/properties", (req, res) => {
+app.post("/api/properties", async (req, res) => {
   try {
     const property = req.body;
     if (!property || !property.id) return res.status(400).json({ error: "Falta 'id' de la propiedad." });
-    res.json({ ok: true, property: db.upsertProperty(property) });
+    res.json({ ok: true, property: await db.upsertProperty(property) });
   } catch (err) {
     console.error("Error guardando propiedad:", err.message);
     res.status(500).json({ error: "No se pudo guardar la propiedad." });
   }
 });
 
-app.delete("/api/properties/:id", (req, res) => {
+app.delete("/api/properties/:id", async (req, res) => {
   try {
-    db.deleteProperty(req.params.id);
+    await db.deleteProperty(req.params.id);
     res.json({ ok: true });
   } catch (err) {
     console.error("Error eliminando propiedad:", err.message);
@@ -354,19 +354,19 @@ app.delete("/api/properties/:id", (req, res) => {
 });
 
 // --- Citas ---
-app.get("/api/appointments", (req, res) => {
+app.get("/api/appointments", async (req, res) => {
   try {
-    res.json({ connected: true, appointments: db.getAllAppointments() });
+    res.json({ connected: true, appointments: await db.getAllAppointments() });
   } catch (err) {
     res.status(500).json({ connected: false, error: "No se pudieron leer las citas." });
   }
 });
 
-app.post("/api/appointments", (req, res) => {
+app.post("/api/appointments", async (req, res) => {
   try {
     const appt = req.body;
     if (!appt || !appt.id) return res.status(400).json({ error: "Falta 'id' de la cita." });
-    res.json({ ok: true, appointment: db.insertAppointment(appt) });
+    res.json({ ok: true, appointment: await db.insertAppointment(appt) });
   } catch (err) {
     console.error("Error guardando cita:", err.message);
     res.status(500).json({ error: "No se pudo guardar la cita." });
@@ -374,17 +374,17 @@ app.post("/api/appointments", (req, res) => {
 });
 
 // --- Prospectos de alta prioridad ---
-app.get("/api/hotleads", (req, res) => {
+app.get("/api/hotleads", async (req, res) => {
   try {
-    res.json({ connected: true, hotLeads: db.getAllHotLeads() });
+    res.json({ connected: true, hotLeads: await db.getAllHotLeads() });
   } catch (err) {
     res.status(500).json({ connected: false, error: "No se pudieron leer los prospectos." });
   }
 });
 
-app.post("/api/hotleads", (req, res) => {
+app.post("/api/hotleads", async (req, res) => {
   try {
-    res.json({ ok: true, hotLead: db.insertHotLead(req.body || {}) });
+    res.json({ ok: true, hotLead: await db.insertHotLead(req.body || {}) });
   } catch (err) {
     console.error("Error guardando prospecto:", err.message);
     res.status(500).json({ error: "No se pudo guardar el prospecto." });
@@ -392,46 +392,46 @@ app.post("/api/hotleads", (req, res) => {
 });
 
 // --- Visitas por propiedad ---
-app.post("/api/properties/:id/view", (req, res) => {
+app.post("/api/properties/:id/view", async (req, res) => {
   try {
-    const count = db.incrementPropertyView(req.params.id);
+    const count = await db.incrementPropertyView(req.params.id);
     res.json({ ok: true, count });
   } catch (err) {
     res.status(500).json({ error: "No se pudo registrar la visita." });
   }
 });
 
-app.get("/api/properties/views", (req, res) => {
+app.get("/api/properties/views", async (req, res) => {
   try {
-    res.json({ connected: true, views: db.getPropertyViewCounts() });
+    res.json({ connected: true, views: await db.getPropertyViewCounts() });
   } catch (err) {
     res.status(500).json({ connected: false, views: {} });
   }
 });
 
 // --- CRM: prospectos y pipeline de ventas ---
-app.get("/api/leads", (req, res) => {
+app.get("/api/leads", async (req, res) => {
   try {
-    res.json({ connected: true, leads: db.getAllLeads() });
+    res.json({ connected: true, leads: await db.getAllLeads() });
   } catch (err) {
     res.status(500).json({ connected: false, error: "No se pudieron leer los prospectos." });
   }
 });
 
-app.post("/api/leads", (req, res) => {
+app.post("/api/leads", async (req, res) => {
   try {
     const lead = req.body;
     if (!lead || !lead.id) return res.status(400).json({ error: "Falta 'id' del prospecto." });
-    res.json({ ok: true, lead: db.upsertLead(lead) });
+    res.json({ ok: true, lead: await db.upsertLead(lead) });
   } catch (err) {
     console.error("Error guardando prospecto del CRM:", err.message);
     res.status(500).json({ error: "No se pudo guardar el prospecto." });
   }
 });
 
-app.delete("/api/leads/:id", (req, res) => {
+app.delete("/api/leads/:id", async (req, res) => {
   try {
-    db.deleteLead(req.params.id);
+    await db.deleteLead(req.params.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: "No se pudo eliminar el prospecto." });
