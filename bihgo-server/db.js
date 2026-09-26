@@ -1,154 +1,256 @@
-/**
- * Base de datos real del sitio BIHGO — versión en archivos JSON, sin
- * dependencias nativas que necesiten compilarse.
- *
- * Antes esto usaba SQLite (better-sqlite3), pero ese paquete necesita
- * compilar código en tu computadora (requiere Python instalado), lo cual
- * complicaba la instalación para quien no es programador. Esta versión
- * guarda exactamente la misma información, de la misma forma permanente
- * (archivos dentro de la carpeta data/), pero usando JSON plano — no
- * necesita compilar nada ni instalar Python.
- */
-const fs = require("fs");
-const path = require("path");
+const { Pool } = require("pg");
 
-const DATA_DIR = path.join(__dirname, "data");
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-const FILES = {
-  properties: path.join(DATA_DIR, "properties.json"),
-  appointments: path.join(DATA_DIR, "appointments.json"),
-  hotLeads: path.join(DATA_DIR, "hot_leads.json"),
-  propertyViews: path.join(DATA_DIR, "property_views.json"),
-  leads: path.join(DATA_DIR, "leads.json"),
-};
-
-function readJson(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf-8"));
-  } catch (e) {
-    return fallback;
-  }
-}
-function writeJson(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+if (!process.env.DATABASE_URL) {
+  throw new Error("Falta la variable de entorno DATABASE_URL");
 }
 
-// Semilla inicial: si el archivo de propiedades no existe todavía (primera
-// vez que se corre el servidor), se carga el mismo inventario de ejemplo
-// que trae el sitio.
-const SEED_PROPERTIES = [
-  { id:"bihgo-001", titulo:"Casa en Zona Esmeralda, Pachuca", operacion:"venta", tipo:"casa", municipio:"Pachuca de Soto", colonia:"Zona Esmeralda", precio:4850000, superficieM2:210, construccionM2:240, recamaras:3, banos:3.5, status:"disponible",
-    descripcion:"Casa de dos niveles en privada con vigilancia, acabados de lujo, cocina integral y jardín. A 5 minutos de Plaza Perisur.",
-    caracteristicas:["Cocina integral","Jardín privado","Roof garden","Walk-in closet en recámara principal","Cuarto de servicio"],
-    servicios:["Vigilancia 24/7","Áreas verdes comunes","Casa club"],
-    imagenes:["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?q=80&w=1600","https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=1600","https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?q=80&w=1600"],
-    lat:20.1181, lng:-98.7591, usoDeSuelo:null, documentosPublicos:[], destacada:true, financiamiento:["bancario","infonavit","fovissste"], regimenPropiedad:"propiedad" },
-  { id:"bihgo-002", titulo:"Terreno industrial cercano a AIFA", operacion:"venta", tipo:"industrial", municipio:"Tizayuca", colonia:"Parque Industrial Tizayuca", precio:32000000, superficieM2:36447, status:"disponible",
-    descripcion:"Terreno industrial de gran superficie con acceso directo a Arco Norte, a 20 minutos de AIFA. Ideal para naves logísticas o desarrollo industrial.",
-    caracteristicas:["Acceso directo a carretera","Uso de suelo industrial","Topografía plana","Factibilidad de servicios en proceso de verificación"],
-    servicios:["Energía eléctrica cercana","Agua potable en zona"],
-    imagenes:["https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=1600","https://images.unsplash.com/photo-1581093458791-9d42e3f0e3d5?q=80&w=1600"],
-    lat:19.8365, lng:-98.9805, usoDeSuelo:"Industrial (registrado en el sitio)", documentosPublicos:["Plano de ubicación","Constancia de uso de suelo"], destacada:true, financiamiento:["bancario"], regimenPropiedad:"propiedad" },
-  { id:"bihgo-003", titulo:"Departamento en Mineral de la Reforma", operacion:"renta", tipo:"departamento", municipio:"Mineral de la Reforma", colonia:"Real de Minas", precio:12500, superficieM2:78, recamaras:2, banos:2, status:"disponible",
-    descripcion:"Departamento en edificio de reciente construcción, amueblado, con amenidades y excelente ubicación cerca de plazas comerciales.",
-    caracteristicas:["Amueblado","Balcón","Cocina equipada"],
-    servicios:["Elevador","Roof garden común","Gimnasio"],
-    imagenes:["https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=1600","https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=1600"],
-    lat:20.0967, lng:-98.7331, usoDeSuelo:null, documentosPublicos:[], destacada:false },
-  { id:"bihgo-004", titulo:"Local comercial en avenida principal", operacion:"renta", tipo:"comercial", municipio:"Pachuca de Soto", colonia:"Centro", precio:18000, superficieM2:95, status:"disponible",
-    descripcion:"Local comercial en planta baja con gran flujo peatonal y vehicular, ideal para franquicia o negocio propio.",
-    caracteristicas:["Fachada amplia","Doble altura","Sanitario propio"],
-    servicios:["Estacionamiento cercano público"],
-    imagenes:["https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1600"],
-    lat:20.1225, lng:-98.7364, usoDeSuelo:null, documentosPublicos:[], destacada:false },
-];
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
-function loadProperties() {
-  if (!fs.existsSync(FILES.properties)) {
-    writeJson(FILES.properties, SEED_PROPERTIES);
-    console.log(`🌱 Se cargó el inventario de ejemplo (${SEED_PROPERTIES.length} propiedades) en la base de datos por primera vez.`);
-    return JSON.parse(JSON.stringify(SEED_PROPERTIES));
-  }
-  return readJson(FILES.properties, []);
+let initialized = false;
+
+async function initDatabase() {
+  if (initialized) return;
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS properties (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS appointments (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS hot_leads (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS property_views (
+      property_id TEXT PRIMARY KEY,
+      count INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS leads (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL
+    );
+  `);
+
+  initialized = true;
+
+  console.log("✅ PostgreSQL BIHGO inicializado correctamente.");
 }
 
 // ---------- Propiedades ----------
-function getAllProperties() {
-  return loadProperties();
+
+async function getAllProperties() {
+  await initDatabase();
+
+  const result = await pool.query(`
+    SELECT data
+    FROM properties
+    ORDER BY id
+  `);
+
+  return result.rows.map(row => row.data);
 }
-function upsertProperty(property) {
-  const list = loadProperties();
-  const idx = list.findIndex((p) => p.id === property.id);
-  if (idx >= 0) list[idx] = property;
-  else list.push(property);
-  writeJson(FILES.properties, list);
+
+async function upsertProperty(property) {
+  await initDatabase();
+
+  await pool.query(
+    `
+      INSERT INTO properties (id, data)
+      VALUES ($1, $2::jsonb)
+      ON CONFLICT (id)
+      DO UPDATE SET data = EXCLUDED.data
+    `,
+    [property.id, JSON.stringify(property)]
+  );
+
   return property;
 }
-function deleteProperty(id) {
-  const list = loadProperties().filter((p) => p.id !== id);
-  writeJson(FILES.properties, list);
+
+async function deleteProperty(id) {
+  await initDatabase();
+
+  await pool.query(
+    `DELETE FROM properties WHERE id = $1`,
+    [id]
+  );
 }
 
 // ---------- Citas ----------
-function getAllAppointments() {
-  return readJson(FILES.appointments, []);
+
+async function getAllAppointments() {
+  await initDatabase();
+
+  const result = await pool.query(`
+    SELECT data
+    FROM appointments
+    ORDER BY id
+  `);
+
+  return result.rows.map(row => row.data);
 }
-function insertAppointment(appt) {
-  const list = readJson(FILES.appointments, []);
-  list.push(appt);
-  writeJson(FILES.appointments, list);
+
+async function insertAppointment(appt) {
+  await initDatabase();
+
+  await pool.query(
+    `
+      INSERT INTO appointments (id, data)
+      VALUES ($1, $2::jsonb)
+      ON CONFLICT (id)
+      DO UPDATE SET data = EXCLUDED.data
+    `,
+    [appt.id, JSON.stringify(appt)]
+  );
+
   return appt;
 }
 
-// ---------- Prospectos de alta prioridad ----------
-function getAllHotLeads() {
-  const list = readJson(FILES.hotLeads, []);
-  return list.slice().reverse();
+// ---------- Hot Leads ----------
+
+async function getAllHotLeads() {
+  await initDatabase();
+
+  const result = await pool.query(`
+    SELECT data
+    FROM hot_leads
+    ORDER BY id DESC
+  `);
+
+  return result.rows.map(row => row.data);
 }
-function insertHotLead(lead) {
-  const id = `lead-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const record = { id, ...lead };
-  const list = readJson(FILES.hotLeads, []);
-  list.push(record);
-  writeJson(FILES.hotLeads, list);
+
+async function insertHotLead(lead) {
+  await initDatabase();
+
+  const id =
+    `lead-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  const record = {
+    id,
+    ...lead
+  };
+
+  await pool.query(
+    `
+      INSERT INTO hot_leads (id, data)
+      VALUES ($1, $2::jsonb)
+    `,
+    [id, JSON.stringify(record)]
+  );
+
   return record;
 }
 
 // ---------- Visitas por propiedad ----------
-function incrementPropertyView(propertyId) {
-  const views = readJson(FILES.propertyViews, {});
-  views[propertyId] = (views[propertyId] || 0) + 1;
-  writeJson(FILES.propertyViews, views);
-  return views[propertyId];
-}
-function getPropertyViewCounts() {
-  return readJson(FILES.propertyViews, {});
+
+async function incrementPropertyView(propertyId) {
+  await initDatabase();
+
+  const result = await pool.query(
+    `
+      INSERT INTO property_views (property_id, count)
+      VALUES ($1, 1)
+      ON CONFLICT (property_id)
+      DO UPDATE SET count = property_views.count + 1
+      RETURNING count
+    `,
+    [propertyId]
+  );
+
+  return result.rows[0].count;
 }
 
-// ---------- CRM: prospectos y pipeline de ventas ----------
-function getAllLeads() {
-  return readJson(FILES.leads, []);
+async function getPropertyViewCounts() {
+  await initDatabase();
+
+  const result = await pool.query(`
+    SELECT property_id, count
+    FROM property_views
+  `);
+
+  const views = {};
+
+  for (const row of result.rows) {
+    views[row.property_id] = row.count;
+  }
+
+  return views;
 }
-function upsertLead(lead) {
-  const list = getAllLeads();
-  const idx = list.findIndex((l) => l.id === lead.id);
+
+// ---------- CRM: Leads ----------
+
+async function getAllLeads() {
+  await initDatabase();
+
+  const result = await pool.query(`
+    SELECT data
+    FROM leads
+    ORDER BY id
+  `);
+
+  return result.rows.map(row => row.data);
+}
+
+async function upsertLead(lead) {
+  await initDatabase();
+
   const now = new Date().toISOString();
-  const record = { ...lead, actualizado: now, creado: lead.creado || now };
-  if (idx >= 0) list[idx] = record;
-  else list.push(record);
-  writeJson(FILES.leads, list);
+
+  const record = {
+    ...lead,
+    actualizado: now,
+    creado: lead.creado || now
+  };
+
+  await pool.query(
+    `
+      INSERT INTO leads (id, data)
+      VALUES ($1, $2::jsonb)
+      ON CONFLICT (id)
+      DO UPDATE SET data = EXCLUDED.data
+    `,
+    [record.id, JSON.stringify(record)]
+  );
+
   return record;
 }
-function deleteLead(id) {
-  const list = getAllLeads().filter((l) => l.id !== id);
-  writeJson(FILES.leads, list);
+
+async function deleteLead(id) {
+  await initDatabase();
+
+  await pool.query(
+    `DELETE FROM leads WHERE id = $1`,
+    [id]
+  );
 }
 
 module.exports = {
-  getAllProperties, upsertProperty, deleteProperty,
-  getAllAppointments, insertAppointment,
-  getAllHotLeads, insertHotLead,
-  incrementPropertyView, getPropertyViewCounts,
-  getAllLeads, upsertLead, deleteLead,
+  initDatabase,
+
+  getAllProperties,
+  upsertProperty,
+  deleteProperty,
+
+  getAllAppointments,
+  insertAppointment,
+
+  getAllHotLeads,
+  insertHotLead,
+
+  incrementPropertyView,
+  getPropertyViewCounts,
+
+  getAllLeads,
+  upsertLead,
+  deleteLead
 };
