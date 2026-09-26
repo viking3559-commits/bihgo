@@ -2,7 +2,7 @@
   "name": "bihgo-agent-server",
   "version": "1.0.0",
   "private": true,
-  "description": "Servidor local mínimo que conecta el Asesor BIHGO con OpenAI, sin exponer la llave en el navegador.",
+  "description": "Servidor BIHGO conectado con OpenAI y PostgreSQL.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -12,6 +12,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "openai": "^4.68.0",
-    "googleapis": "^144.0.0"
+    "googleapis": "^144.0.0",
+    "pg": "^8.16.3"
   }
 }
