@@ -32,6 +32,8 @@ jobs:
               data = json.load(response)
 
           properties = data.get("properties", [])
+          print("PROPIEDADES RECIBIDAS:", len(properties))
+          print("DATOS:", properties)
 
           urls = [
               ("https://bihgo.com.mx/", "weekly", "1.0")
